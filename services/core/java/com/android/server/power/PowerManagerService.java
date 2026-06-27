@@ -4587,6 +4587,12 @@ public final class PowerManagerService extends SystemService
             } finally {
                 Trace.traceEnd(Trace.TRACE_TAG_POWER);
             }
+            // Re-apply DT2W on each screen-off: the Oplus touch driver resets its
+            // gesture nodes during display panel initialization at boot, after the
+            // initial updateSettings() call, so the setting must be re-applied here.
+            if (!enable && mSupportsDoubleTapWakeConfig) {
+                mNativeWrapper.nativeSetPowerMode(Mode.DOUBLE_TAP_TO_WAKE, mDoubleTapWakeEnabled);
+            }
         }
     }
 

@@ -97,6 +97,7 @@ public class DozeTriggers implements DozeMachine.Part {
     private DozeMachine mMachine;
     private final DozeLog mDozeLog;
     private final DozeSensors mDozeSensors;
+    private final DozeScreenBrightness mDozeScreenBrightness;
     private final DozeHost mDozeHost;
     private final AmbientDisplayConfiguration mConfig;
     private final DozeParameters mDozeParameters;
@@ -220,9 +221,11 @@ public class DozeTriggers implements DozeMachine.Part {
             KeyguardStateController keyguardStateController,
             DevicePostureController devicePostureController,
             UserTracker userTracker,
-            SelectedUserInteractor selectedUserInteractor) {
+            SelectedUserInteractor selectedUserInteractor,
+            DozeScreenBrightness dozeScreenBrightness) {
         mContext = context;
         mDozeHost = dozeHost;
+        mDozeScreenBrightness = dozeScreenBrightness;
         mConfig = config;
         mDozeParameters = dozeParameters;
         mSensorManager = sensorManager;
@@ -366,6 +369,7 @@ public class DozeTriggers implements DozeMachine.Part {
                         mDozeLog.traceSensorEventDropped(pulseReason, "keyguard occluded");
                         return;
                     }
+                    mDozeScreenBrightness.onPickupGesture();
                     gentleWakeUp(pulseReason);
                 } else if (isUdfpsLongPress) {
                     if (canPulse(mMachine.getState(), true)) {

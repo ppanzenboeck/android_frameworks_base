@@ -3135,9 +3135,54 @@ public class PhoneWindowManager implements WindowManagerPolicy {
             super(KeyEvent.KEYCODE_ASSIST);
         }
 
-        @Override
+                @Override
         public boolean supportLongPress() {
-            return mAssistLongPressAction != Action.NOTHING;
+            // Always return true to ensure the gesture detector starts the timer.
+            // This safely prevents short-press misfires when using the camera shutter feature.
+            return true;
+        }
+
+        @Override
+        public int getMaxMultiPressCount() {
+            // Force the gesture engine to explicitly track and fire single-clicks,
+            // bypassing the engine's attempt to ignore the key if the user set "No Action".
+            return 1;
+        }
+
+        /**
+         * Dynamically checks if the currently focused window is a Camera application
+         * by querying the ActivityTaskManager for the foreground package.
+         */
+        private boolean isCameraAppActive() {
+            try {
+                android.app.ActivityTaskManager.RootTaskInfo info = mActivityManagerService.getFocusedRootTaskInfo();
+                if (info == null || info.topActivity == null) return false;
+
+                String pkg = info.topActivity.getPackageName();
+
+                // Fast-path string match for performance
+                if (pkg.contains("camera") || pkg.equals("org.lineageos.aperture")) {
+                    return true;
+                }
+
+                // Dynamic check via PackageManager for 3rd party cameras
+                android.content.pm.PackageManager pm = mContext.getPackageManager();
+
+                android.content.Intent photoIntent = new android.content.Intent(android.provider.MediaStore.INTENT_ACTION_STILL_IMAGE_CAMERA).setPackage(pkg);
+                if (pm.resolveActivity(photoIntent, 0) != null) return true;
+
+                android.content.Intent secureIntent = new android.content.Intent(android.provider.MediaStore.INTENT_ACTION_STILL_IMAGE_CAMERA_SECURE).setPackage(pkg);
+                if (pm.resolveActivity(secureIntent, 0) != null) return true;
+
+                android.content.Intent videoIntent = new android.content.Intent(android.provider.MediaStore.INTENT_ACTION_VIDEO_CAMERA).setPackage(pkg);
+                if (pm.resolveActivity(videoIntent, 0) != null) return true;
+
+            } catch (android.os.RemoteException e) {
+                android.util.Slog.w(TAG, "Failed to get focused root task info", e);
+            } catch (Exception e) {
+                android.util.Slog.w(TAG, "Failed to resolve camera intents", e);
+            }
+            return false;
         }
 
         @Override
@@ -3145,12 +3190,39 @@ public class PhoneWindowManager implements WindowManagerPolicy {
             if (event.getAction() != ACTION_COMPLETE) {
                 return;
             }
+
+            // Read the toggle state from LineageSettings (defaults to 0/false if not set)
+            boolean shutterEnabled = lineageos.providers.LineageSettings.System.getIntForUser(
+                    mContext.getContentResolver(), "hardware_keys_menu_camera_shutter", 0, android.os.UserHandle.USER_CURRENT) == 1;
+
+            boolean isCameraActive = shutterEnabled && isCameraAppActive();
+
             switch (event.getType()) {
                 case SINGLE_KEY_GESTURE_TYPE_PRESS:
-                    assistPress();
+                    if (event.getPressCount() == 1) {
+                        if (isCameraActive) {
+                            // Inject physical shutter key for the active camera app
+                            long now = android.os.SystemClock.uptimeMillis();
+                            android.hardware.input.InputManager im = mContext.getSystemService(android.hardware.input.InputManager.class);
+                            if (im != null) {
+                                im.injectInputEvent(
+                                        new KeyEvent(now, now, KeyEvent.ACTION_DOWN, KeyEvent.KEYCODE_CAMERA, 0, 0, android.view.KeyCharacterMap.VIRTUAL_KEYBOARD, 0, 0, android.view.InputDevice.SOURCE_KEYBOARD),
+                                        android.hardware.input.InputManager.INJECT_INPUT_EVENT_MODE_ASYNC);
+                                im.injectInputEvent(
+                                        new KeyEvent(now, now, KeyEvent.ACTION_UP, KeyEvent.KEYCODE_CAMERA, 0, 0, android.view.KeyCharacterMap.VIRTUAL_KEYBOARD, 0, 0, android.view.InputDevice.SOURCE_KEYBOARD),
+                                        android.hardware.input.InputManager.INJECT_INPUT_EVENT_MODE_ASYNC);
+                            }
+                        } else {
+                            // Camera shutter disabled or not in camera; execute standard action
+                            assistPress();
+                        }
+                    }
                     break;
                 case SINGLE_KEY_GESTURE_TYPE_LONG_PRESS:
-                    assistLongPress();
+                    if (!isCameraActive) {
+                        // Only trigger the standard long press if we aren't using the camera
+                        assistLongPress();
+                    }
                     break;
             }
         }

@@ -664,7 +664,7 @@ public class ScreenDecorations implements
             List<DecorProvider> decorProviders = getProviders(mHwcScreenDecorationSupport != null);
             removeRedundantOverlayViews(decorProviders);
 
-            if (mHwcScreenDecorationSupport != null) {
+            if (false && mHwcScreenDecorationSupport != null) {
                 createHwcOverlay();
             } else {
                 removeHwcOverlay();

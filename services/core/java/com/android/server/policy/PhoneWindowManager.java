@@ -756,6 +756,7 @@ public class PhoneWindowManager implements WindowManagerPolicy {
     private final SparseArray<Set<Integer>> mConsumedKeysForDevice = new SparseArray<>();
     PowerManager.WakeLock mBroadcastWakeLock;
     PowerManager.WakeLock mPowerKeyWakeLock;
+    PowerManager.WakeLock mAssistKeyWakeLock;
     boolean mHavePendingMediaKeyRepeatWithWakeLock;
 
     private int mCurrentUserId;
@@ -1829,7 +1830,18 @@ public class PhoneWindowManager implements WindowManagerPolicy {
     }
 
     private void assistPress() {
-        if (canPerformKeyAction(mAssistPressAction)) {
+        final boolean isScreenOff = !mDefaultDisplayPolicy.isAwake() || !mPowerManager.isInteractive();
+        if (isScreenOff) {
+            if (!mWakeOnAssistKeyPress) {
+                return;
+            }
+            if (mAssistPressAction == Action.NOTHING) {
+                mPowerManager.wakeUp(SystemClock.uptimeMillis(),
+                        PowerManager.WAKE_REASON_GESTURE, "Assist Key Press Wake");
+                return;
+            }
+        }
+        if (mAssistPressAction != Action.NOTHING) {
             if (mAssistPressAction != Action.APP_SWITCH) {
                 cancelPreloadRecentApps();
             }
@@ -1844,7 +1856,18 @@ public class PhoneWindowManager implements WindowManagerPolicy {
     }
 
     private void assistLongPress() {
-        if (canPerformKeyAction(mAssistLongPressAction)) {
+        final boolean isScreenOff = !mDefaultDisplayPolicy.isAwake() || !mPowerManager.isInteractive();
+        if (isScreenOff) {
+            if (!mWakeOnAssistKeyPress) {
+                return;
+            }
+            if (mAssistLongPressAction == Action.NOTHING) {
+                mPowerManager.wakeUp(SystemClock.uptimeMillis(),
+                        PowerManager.WAKE_REASON_GESTURE, "Assist Key Long Press Wake");
+                return;
+            }
+        }
+        if (mAssistLongPressAction != Action.NOTHING) {
             if (mAssistLongPressAction != Action.APP_SWITCH) {
                 cancelPreloadRecentApps();
             }
@@ -2371,6 +2394,16 @@ public class PhoneWindowManager implements WindowManagerPolicy {
     }
 
     private void performKeyAction(Action action, KeyEvent event, int assistInvocationType) {
+        if (!mDefaultDisplayPolicy.isAwake() && !mPowerManager.isInteractive()) {
+            if (action != Action.NOTHING
+                    && action != Action.TORCH
+                    && action != Action.PLAY_PAUSE_MUSIC
+                    && action != Action.SLEEP
+                    && action != Action.RINGER_MODES) {
+                mPowerManager.wakeUp(SystemClock.uptimeMillis(),
+                        PowerManager.WAKE_REASON_GESTURE, "Assist Key Action");
+            }
+        }
         switch (action) {
             case NOTHING:
                 break;
@@ -2771,6 +2804,8 @@ public class PhoneWindowManager implements WindowManagerPolicy {
                 "PhoneWindowManager.mBroadcastWakeLock");
         mPowerKeyWakeLock = mPowerManager.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK,
                 "PhoneWindowManager.mPowerKeyWakeLock");
+        mAssistKeyWakeLock = mPowerManager.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK,
+                "PhoneWindowManager.mAssistKeyWakeLock");
         mLidKeyboardAccessibility = mContext.getResources().getInteger(
                 com.android.internal.R.integer.config_lidKeyboardAccessibility);
         mLidNavigationAccessibility = mContext.getResources().getInteger(
@@ -3154,6 +3189,9 @@ public class PhoneWindowManager implements WindowManagerPolicy {
          * by querying the ActivityTaskManager for the foreground package.
          */
         private boolean isCameraAppActive() {
+            if (!mDefaultDisplayPolicy.isAwake() || !mPowerManager.isInteractive()) {
+                return false;
+            }
             try {
                 android.app.ActivityTaskManager.RootTaskInfo info = mActivityManagerService.getFocusedRootTaskInfo();
                 if (info == null || info.topActivity == null) return false;
@@ -5718,21 +5756,25 @@ public class PhoneWindowManager implements WindowManagerPolicy {
                 break;
             }
             case KeyEvent.KEYCODE_ASSIST: {
+                final boolean isScreenOff = !mDefaultDisplayPolicy.isAwake() || !mPowerManager.isInteractive();
+                if (isScreenOff && !mWakeOnAssistKeyPress) {
+                    result &= ~ACTION_PASS_TO_USER;
+                    break;
+                }
                 if (down) {
-                    if (!interactive) {
-                        isWakeKey = mWakeOnAssistKeyPress;
-                        if (!isWakeKey) {
-                            useHapticFeedback = false;
-                        }
+                    if (!mAssistKeyWakeLock.isHeld()) {
+                        mAssistKeyWakeLock.acquire(3000);
                     }
-
-                    if (!keyguardOn()) {
-                        if (mAssistPressAction == Action.APP_SWITCH
-                                || mAssistLongPressAction == Action.APP_SWITCH) {
-                            preloadRecentApps();
-                        }
+                    if (mAssistPressAction == Action.APP_SWITCH
+                            || mAssistLongPressAction == Action.APP_SWITCH) {
+                        preloadRecentApps();
+                    }
+                } else {
+                    if (mAssistKeyWakeLock.isHeld()) {
+                        mAssistKeyWakeLock.release();
                     }
                 }
+                result &= ~ACTION_PASS_TO_USER;
                 break;
             }
             case KeyEvent.KEYCODE_VOICE_ASSIST: {
@@ -5983,7 +6025,7 @@ public class PhoneWindowManager implements WindowManagerPolicy {
                 return mWakeOnDpadKeyPress;
 
             case KeyEvent.KEYCODE_ASSIST:
-                return mWakeOnAssistKeyPress;
+                return false;
 
             case KeyEvent.KEYCODE_BACK:
                 return mWakeOnBackKeyPress;

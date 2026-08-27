@@ -630,6 +630,7 @@ public class PhoneWindowManager implements WindowManagerPolicy {
     MetricsLogger mLogger;
     boolean mWakeOnDpadKeyPress;
     boolean mWakeOnAssistKeyPress;
+    boolean mWakeOnAssistKeyLongPress;
     boolean mWakeOnBackKeyPress;
     boolean mSilenceRingerOnSleepKey;
     long mWakeUpToLastStateTimeout;
@@ -1092,6 +1093,9 @@ public class PhoneWindowManager implements WindowManagerPolicy {
                     UserHandle.USER_ALL);
             resolver.registerContentObserver(LineageSettings.System.getUriFor(
                     LineageSettings.System.ASSIST_WAKE_SCREEN), false, this,
+                    UserHandle.USER_ALL);
+            resolver.registerContentObserver(LineageSettings.System.getUriFor(
+                    LineageSettings.System.ASSIST_WAKE_SCREEN_LONG_PRESS), false, this,
                     UserHandle.USER_ALL);
             resolver.registerContentObserver(LineageSettings.System.getUriFor(
                     LineageSettings.System.APP_SWITCH_WAKE_SCREEN), false, this,
@@ -1832,7 +1836,7 @@ public class PhoneWindowManager implements WindowManagerPolicy {
     private void assistPress() {
         final boolean isScreenOff = !mDefaultDisplayPolicy.isAwake() || !mPowerManager.isInteractive();
         if (isScreenOff) {
-            if (!mWakeOnAssistKeyPress) {
+            if (!mWakeOnAssistKeyPress || mWakeOnAssistKeyLongPress) {
                 return;
             }
             if (mAssistPressAction == Action.NOTHING) {
@@ -3661,6 +3665,8 @@ public class PhoneWindowManager implements WindowManagerPolicy {
             mWakeOnAssistKeyPress = (LineageSettings.System.getIntForUser(resolver,
                     LineageSettings.System.ASSIST_WAKE_SCREEN, 0, UserHandle.USER_CURRENT) == 1)
                     && ((mDeviceHardwareWakeKeys & KEY_MASK_ASSIST) != 0);
+            mWakeOnAssistKeyLongPress = LineageSettings.System.getIntForUser(resolver,
+                    LineageSettings.System.ASSIST_WAKE_SCREEN_LONG_PRESS, 1, UserHandle.USER_CURRENT) == 1;
             mWakeOnAppSwitchKeyPress = (LineageSettings.System.getIntForUser(resolver,
                     LineageSettings.System.APP_SWITCH_WAKE_SCREEN, 0, UserHandle.USER_CURRENT) == 1)
                     && ((mDeviceHardwareWakeKeys & KEY_MASK_APP_SWITCH) != 0);

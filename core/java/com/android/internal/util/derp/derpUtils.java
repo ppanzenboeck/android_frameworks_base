@@ -207,26 +207,10 @@ public class derpUtils {
 
     // Cycle ringer modes
     public static void toggleRingerModes (Context context) {
-        AudioManager am = (AudioManager) context.getSystemService(Context.AUDIO_SERVICE);
-        Vibrator mVibrator = (Vibrator) context.getSystemService(VIBRATOR_SERVICE);
-
-        switch (am.getRingerMode()) {
-            case AudioManager.RINGER_MODE_NORMAL:
-                if (mVibrator.hasVibrator()) {
-                    am.setRingerMode(AudioManager.RINGER_MODE_VIBRATE);
-                }
-                break;
-            case AudioManager.RINGER_MODE_VIBRATE:
-                am.setRingerMode(AudioManager.RINGER_MODE_NORMAL);
-                NotificationManager notificationManager =
-                        (NotificationManager) context.getSystemService(NOTIFICATION_SERVICE);
-                notificationManager.setInterruptionFilter(
-                        NotificationManager.INTERRUPTION_FILTER_PRIORITY);
-                break;
-            case AudioManager.RINGER_MODE_SILENT:
-                am.setRingerMode(AudioManager.RINGER_MODE_NORMAL);
-                break;
-        }
+        Intent cycleIntent = new Intent("org.lineageos.settings.CYCLE_RINGER_MODE");
+        cycleIntent.setPackage("org.lineageos.settings.device");
+        cycleIntent.addFlags(Intent.FLAG_RECEIVER_FOREGROUND);
+        context.sendBroadcastAsUser(cycleIntent, UserHandle.CURRENT);
     }
 
     // Switch to last app

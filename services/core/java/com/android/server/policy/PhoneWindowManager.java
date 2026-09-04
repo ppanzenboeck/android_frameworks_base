@@ -8142,22 +8142,29 @@ public class PhoneWindowManager implements WindowManagerPolicy {
     }
 
     private void toggleRingerModes() {
-        AudioManager am = (AudioManager) mContext.getSystemService(Context.AUDIO_SERVICE);
+        Intent cycleIntent = new Intent("org.lineageos.settings.CYCLE_RINGER_MODE");
+        cycleIntent.setPackage("org.lineageos.settings.device");
+        cycleIntent.addFlags(Intent.FLAG_RECEIVER_FOREGROUND);
+        mContext.sendBroadcastAsUser(cycleIntent, UserHandle.CURRENT);
 
-        switch (am.getRingerMode()) {
-            case AudioManager.RINGER_MODE_NORMAL:
-                if (mVibrator.hasVibrator()) {
-                    am.setRingerMode(AudioManager.RINGER_MODE_VIBRATE);
-                }
-                break;
-            case AudioManager.RINGER_MODE_VIBRATE:
-                am.setRingerMode(AudioManager.RINGER_MODE_NORMAL);
-                NotificationManager nm = getNotificationService();
-                nm.setInterruptionFilter(NotificationManager.INTERRUPTION_FILTER_PRIORITY);
-                break;
-            case AudioManager.RINGER_MODE_SILENT:
-                am.setRingerMode(AudioManager.RINGER_MODE_NORMAL);
-                break;
+        if (mDeviceKeyHandlers.isEmpty()) {
+            AudioManager am = (AudioManager) mContext.getSystemService(Context.AUDIO_SERVICE);
+
+            switch (am.getRingerMode()) {
+                case AudioManager.RINGER_MODE_NORMAL:
+                    if (mVibrator.hasVibrator()) {
+                        am.setRingerMode(AudioManager.RINGER_MODE_VIBRATE);
+                    }
+                    break;
+                case AudioManager.RINGER_MODE_VIBRATE:
+                    am.setRingerMode(AudioManager.RINGER_MODE_NORMAL);
+                    NotificationManager nm = getNotificationService();
+                    nm.setInterruptionFilter(NotificationManager.INTERRUPTION_FILTER_PRIORITY);
+                    break;
+                case AudioManager.RINGER_MODE_SILENT:
+                    am.setRingerMode(AudioManager.RINGER_MODE_NORMAL);
+                    break;
+            }
         }
     }
 }

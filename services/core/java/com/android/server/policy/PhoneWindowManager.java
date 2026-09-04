@@ -8146,9 +8146,8 @@ public class PhoneWindowManager implements WindowManagerPolicy {
 
     private void toggleRingerModes() {
         Intent cycleIntent = new Intent("org.lineageos.settings.CYCLE_RINGER_MODE");
-        cycleIntent.setPackage("org.lineageos.settings.device");
         cycleIntent.addFlags(Intent.FLAG_RECEIVER_FOREGROUND);
-        mContext.sendBroadcastAsUser(cycleIntent, UserHandle.CURRENT);
+        mContext.sendBroadcastAsUser(cycleIntent, UserHandle.ALL);
 
         if (mDeviceKeyHandlers.isEmpty()) {
             AudioManager am = (AudioManager) mContext.getSystemService(Context.AUDIO_SERVICE);

@@ -208,9 +208,8 @@ public class derpUtils {
     // Cycle ringer modes
     public static void toggleRingerModes (Context context) {
         Intent cycleIntent = new Intent("org.lineageos.settings.CYCLE_RINGER_MODE");
-        cycleIntent.setPackage("org.lineageos.settings.device");
         cycleIntent.addFlags(Intent.FLAG_RECEIVER_FOREGROUND);
-        context.sendBroadcastAsUser(cycleIntent, UserHandle.CURRENT);
+        context.sendBroadcastAsUser(cycleIntent, UserHandle.ALL);
     }
 
     // Switch to last app

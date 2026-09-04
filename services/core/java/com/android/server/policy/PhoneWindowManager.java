@@ -2480,6 +2480,9 @@ public class PhoneWindowManager implements WindowManagerPolicy {
             case RINGER_MODES:
                 toggleRingerModes();
                 break;
+            case START_RECORDING:
+                startVoiceRecording();
+                break;
             default:
                 break;
         }
@@ -8165,6 +8168,17 @@ public class PhoneWindowManager implements WindowManagerPolicy {
                     am.setRingerMode(AudioManager.RINGER_MODE_NORMAL);
                     break;
             }
+        }
+    }
+
+    private void startVoiceRecording() {
+        Intent intent = new Intent(android.provider.MediaStore.Audio.Media.RECORD_SOUND_ACTION);
+        intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+        intent.putExtra("android.intent.extra.START_RECORDING", true);
+        try {
+            mContext.startActivityAsUser(intent, UserHandle.CURRENT);
+        } catch (ActivityNotFoundException e) {
+            Slog.w(TAG, "No sound recorder app available to handle RECORD_SOUND action", e);
         }
     }
 }

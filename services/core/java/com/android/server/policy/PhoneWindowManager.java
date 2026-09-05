@@ -150,8 +150,11 @@ import android.content.IntentFilter;
 import android.content.PermissionChecker;
 import android.content.pm.ActivityInfo;
 import android.content.pm.ApplicationInfo;
+import android.content.pm.LauncherApps;
 import android.content.pm.PackageManager;
 import android.content.pm.ResolveInfo;
+import android.content.pm.ShortcutInfo;
+import android.content.pm.ShortcutServiceInternal;
 import android.content.res.Configuration;
 import android.content.res.Resources;
 import android.database.ContentObserver;
@@ -8171,13 +8174,90 @@ public class PhoneWindowManager implements WindowManagerPolicy {
     }
 
     private void startVoiceRecording() {
-        Intent intent = new Intent(android.provider.MediaStore.Audio.Media.RECORD_SOUND_ACTION);
-        intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
-        intent.putExtra("android.intent.extra.START_RECORDING", true);
+        Intent baseIntent = new Intent(MediaStore.Audio.Media.RECORD_SOUND_ACTION);
+        baseIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+        baseIntent.putExtra("android.intent.extra.START_RECORDING", true);
+        baseIntent.putExtra("android.provider.MediaStore.extra.START_RECORDING", true);
+        baseIntent.putExtra("org.lineageos.recorder.extra.START_RECORDING", true);
+        baseIntent.putExtra("auto_start", true);
+        baseIntent.putExtra("start_recording", true);
+        baseIntent.putExtra("START_RECORDING", true);
+
+        // 1. Try launching the direct "Record" shortcut of the preferred/default recorder app
         try {
-            mContext.startActivityAsUser(intent, UserHandle.CURRENT);
+            ResolveInfo resolveInfo = mPackageManager.resolveActivityAsUser(
+                    baseIntent, PackageManager.MATCH_DEFAULT_ONLY, mCurrentUserId);
+            if (resolveInfo == null || resolveInfo.activityInfo == null) {
+                resolveInfo = mPackageManager.resolveActivityAsUser(
+                        baseIntent, 0, mCurrentUserId);
+            }
+            if (resolveInfo != null && resolveInfo.activityInfo != null) {
+                String pkg = resolveInfo.activityInfo.packageName;
+                if (pkg != null && !"android".equals(pkg)) {
+                    ShortcutServiceInternal shortcutService = LocalServices.getService(
+                            ShortcutServiceInternal.class);
+                    if (shortcutService != null) {
+                        List<ShortcutInfo> shortcuts = shortcutService.getShortcuts(
+                                mCurrentUserId, "android", 0, pkg, null, null, null,
+                                LauncherApps.ShortcutQuery.FLAG_MATCH_ALL_KINDS,
+                                mCurrentUserId, Process.myPid(), Process.myUid());
+                        if (shortcuts != null && !shortcuts.isEmpty()) {
+                            ShortcutInfo bestShortcut = null;
+                            for (ShortcutInfo s : shortcuts) {
+                                String id = s.getId();
+                                CharSequence shortLabel = s.getShortLabel();
+                                CharSequence longLabel = s.getLongLabel();
+                                String idStr = (id != null) ? id.toLowerCase() : "";
+                                String labelStr = (shortLabel != null ? shortLabel.toString().toLowerCase() : "")
+                                        + " " + (longLabel != null ? longLabel.toString().toLowerCase() : "");
+                                if (idStr.contains("record") || idStr.contains("start")
+                                        || labelStr.contains("record") || labelStr.contains("aufnehmen")
+                                        || labelStr.contains("grab") || labelStr.contains("enregistr")
+                                        || labelStr.contains("sound") || labelStr.contains("audio")) {
+                                    bestShortcut = s;
+                                    break;
+                                }
+                            }
+                            if (bestShortcut == null && shortcuts.size() == 1) {
+                                bestShortcut = shortcuts.get(0);
+                            }
+                            if (bestShortcut != null) {
+                                Intent[] intents = shortcutService.createShortcutIntents(
+                                        mCurrentUserId, "android", pkg, bestShortcut.getId(),
+                                        mCurrentUserId, Process.myPid(), Process.myUid());
+                                if (intents != null && intents.length > 0) {
+                                    for (Intent in : intents) {
+                                        in.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                                        in.putExtra("android.intent.extra.START_RECORDING", true);
+                                        in.putExtra("android.provider.MediaStore.extra.START_RECORDING", true);
+                                        in.putExtra("org.lineageos.recorder.extra.START_RECORDING", true);
+                                        in.putExtra("auto_start", true);
+                                        in.putExtra("start_recording", true);
+                                        in.putExtra("START_RECORDING", true);
+                                    }
+                                    mContext.startActivitiesAsUser(intents, null, UserHandle.of(mCurrentUserId));
+                                    scheduleVirtualRecordKey();
+                                    return;
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        } catch (Exception e) {
+            Slog.w(TAG, "Error resolving shortcut for sound recorder", e);
+        }
+
+        // 2. Fallback: Launch the activity directly with auto-start intent extras
+        try {
+            startActivityAsUser(baseIntent, UserHandle.of(mCurrentUserId));
+            scheduleVirtualRecordKey();
         } catch (ActivityNotFoundException e) {
             Slog.w(TAG, "No sound recorder app available to handle RECORD_SOUND action", e);
         }
+    }
+
+    private void scheduleVirtualRecordKey() {
+        mHandler.postDelayed(() -> triggerVirtualKeypress(KeyEvent.KEYCODE_MEDIA_RECORD), 500);
     }
 }

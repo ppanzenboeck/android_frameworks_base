@@ -30,6 +30,7 @@ import android.content.pm.ApplicationInfo;
 import android.content.pm.PackageManager;
 import android.content.pm.PackageManager.NameNotFoundException;
 import android.database.ContentObserver;
+import android.hardware.display.AmbientDisplayConfiguration;
 import android.media.AudioAttributes;
 import android.media.AudioDeviceAttributes;
 import android.media.AudioManager;
@@ -39,6 +40,7 @@ import android.media.IVolumeController;
 import android.media.VolumePolicy;
 import android.net.Uri;
 import android.os.Handler;
+import android.os.UserHandle;
 import android.os.HandlerExecutor;
 import android.os.Looper;
 import android.os.Message;
@@ -106,6 +108,9 @@ public class VolumeDialogControllerImpl implements VolumeDialogController, Dumpa
     private static final String TAG = Util.logTag(VolumeDialogControllerImpl.class);
     private static final boolean DEBUG = Log.isLoggable(TAG, Log.DEBUG);
 
+    // Intent to trigger Doze Pulse
+    private static final String DOZE_INTENT = "com.android.systemui.doze.pulse";
+
     private static final int TOUCH_FEEDBACK_TIMEOUT_MS = 1000;
     // We only need one dynamic stream for broadcast because at most two headsets are allowed
     // to join local broadcast in current stage.
@@ -137,6 +142,7 @@ public class VolumeDialogControllerImpl implements VolumeDialogController, Dumpa
 
     private final W mWorker;
     private final Context mContext;
+    private final AmbientDisplayConfiguration mAmbientConfig;
     private final Looper mWorkerLooper;
     private final PackageManager mPackageManager;
     private final WakefulnessLifecycle mWakefulnessLifecycle;
@@ -213,6 +219,7 @@ public class VolumeDialogControllerImpl implements VolumeDialogController, Dumpa
             VolumeLogger volumeLogger
     ) {
         mContext = context.getApplicationContext();
+        mAmbientConfig = new AmbientDisplayConfiguration(mContext);
         mPackageManager = packageManager;
         mWakefulnessLifecycle = wakefulnessLifecycle;
         Events.writeEvent(Events.EVENT_COLLECTION_STARTED);
@@ -585,29 +592,52 @@ public class VolumeDialogControllerImpl implements VolumeDialogController, Dumpa
         final boolean fromKey = (flags & AudioManager.FLAG_FROM_KEY) != 0;
         final boolean showVibrateHint = (flags & AudioManager.FLAG_SHOW_VIBRATE_HINT) != 0;
         final boolean showSilentHint = (flags & AudioManager.FLAG_SHOW_SILENT_HINT) != 0;
+
+        // Custom: Check if we should show UI on Doze
+        final boolean showDozeUI = mShowVolumeDialog && fromKey && !mDeviceInteractive;
+
         boolean changed = false;
-        if (showUI) {
+        boolean levelChanged = false;
+
+        if (showUI || showDozeUI) {
             changed |= updateActiveStreamW(stream);
         }
+
         int lastAudibleStreamVolume = getAudioManagerStreamVolume(stream);
-        changed |= updateStreamLevelW(stream, lastAudibleStreamVolume);
+        levelChanged = updateStreamLevelW(stream, lastAudibleStreamVolume);
+        changed |= levelChanged;
+
         changed |= checkRoutedToBluetoothW(showUI ? AudioManager.STREAM_MUSIC : stream);
+
         if (changed && sendChanges) {
             mCallbacks.onStateChanged(mState);
         }
-        if (showUI) {
+
+        if (showUI || showDozeUI) {
             onShowRequestedW(Events.SHOW_REASON_VOLUME_CHANGED);
         }
+
         if (showVibrateHint) {
             mCallbacks.onShowVibrateHint();
         }
         if (showSilentHint) {
             mCallbacks.onShowSilentHint();
         }
+
         if (changed && fromKey) {
             Events.writeEvent(Events.EVENT_KEY, stream, lastAudibleStreamVolume);
             mCallbacks.onVolumeChangedFromKey();
         }
+
+        if (showDozeUI) {
+            launchDozePulse();
+
+            // Avoid it triggering if already 100% volume
+            if (levelChanged) {
+                vibrate(VibrationEffect.createPredefined(VibrationEffect.EFFECT_TEXTURE_TICK));
+            }
+        }
+
         return changed;
     }
 
@@ -909,6 +939,12 @@ public class VolumeDialogControllerImpl implements VolumeDialogController, Dumpa
                 mCallbacks.onStateChanged(mState);
             }
         }
+    }
+
+    private void launchDozePulse() {
+        //if (mAmbientConfig.pulseOnNotificationEnabled(UserHandle.USER_CURRENT)) {
+        mContext.sendBroadcastAsUser(new Intent(DOZE_INTENT), UserHandle.CURRENT);
+        //}
     }
 
     private final class VC extends IVolumeController.Stub {

@@ -42,7 +42,7 @@
             android:scaleType="fitCenter"
             android:tint="@color/materialColorOnSurface"
             android:importantForAccessibility="no"
-            android:src="@drawable/ic_trophy"></ImageView>
+            android:visibility="gone" />
 
         <TextView
             android:id="@+id/text"

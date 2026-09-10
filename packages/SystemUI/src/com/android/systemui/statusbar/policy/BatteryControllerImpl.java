@@ -30,6 +30,7 @@ import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
 import android.database.ContentObserver;
+import android.provider.Settings;
 import android.hardware.usb.UsbManager;
 import android.net.Uri;
 import android.os.BatteryManager;
@@ -111,6 +112,7 @@ public class BatteryControllerImpl extends BroadcastReceiver implements BatteryC
     private boolean mAodPowerSave;
     private boolean mWirelessCharging;
     private boolean mIsBatteryDefender = false;
+    protected int mChargingStatus = CHARGING_POLICY_DEFAULT;
     private boolean mIsIncompatibleCharging = false;
     private boolean mIsExtremeSaver = false;
     private boolean mTestMode = false;
@@ -190,6 +192,15 @@ public class BatteryControllerImpl extends BroadcastReceiver implements BatteryC
         }
         mDemoModeController.addCallback(this);
         mDumpManager.registerDumpable(TAG, this);
+        mContext.getContentResolver().registerContentObserver(
+                Settings.Global.getUriFor("bypass_charge_active"),
+                false,
+                new ContentObserver(mMainHandler) {
+                    @Override
+                    public void onChange(boolean selfChange) {
+                        updateBatteryDefender();
+                    }
+                });
         updatePowerSave();
         updateEstimateInBackground();
     }
@@ -309,6 +320,7 @@ public class BatteryControllerImpl extends BroadcastReceiver implements BatteryC
             }
 
             int chargingStatus = intent.getIntExtra(EXTRA_CHARGING_STATUS, CHARGING_POLICY_DEFAULT);
+            mChargingStatus = chargingStatus;
             boolean isBatteryDefender = isBatteryDefenderMode(chargingStatus);
             if (isBatteryDefender != mIsBatteryDefender) {
                 mIsBatteryDefender = isBatteryDefender;
@@ -414,8 +426,22 @@ public class BatteryControllerImpl extends BroadcastReceiver implements BatteryC
      * Checks whether the device is in battery defender mode based on the current charging
      * status. This method can be overridden to have a different definition for its subclasses.
      */
+    private boolean isBypassChargingActive() {
+        return Settings.Global.getInt(mContext.getContentResolver(), "bypass_charge_active", 0) == 1;
+    }
+
     protected boolean isBatteryDefenderMode(int chargingStatus) {
-        return chargingStatus == CHARGING_POLICY_ADAPTIVE_LONGLIFE;
+        return chargingStatus == CHARGING_POLICY_ADAPTIVE_LONGLIFE
+                || (mPluggedIn && isBypassChargingActive());
+    }
+
+    private void updateBatteryDefender() {
+        boolean isBatteryDefender = isBatteryDefenderMode(mChargingStatus);
+        if (isBatteryDefender != mIsBatteryDefender) {
+            mIsBatteryDefender = isBatteryDefender;
+            fireIsBatteryDefenderChanged();
+            fireBatteryLevelChanged();
+        }
     }
 
     /**

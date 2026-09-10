@@ -74,7 +74,13 @@ class EmptyShadeIconView @JvmOverloads constructor(context: Context, attrs: Attr
         textView.text = text
     }
 
-    fun setIcon(icon: Icon) {
+    fun setIcon(icon: Icon?) {
+        if (icon == null) {
+            iconView.setImageDrawable(null)
+            iconView.visibility = View.GONE
+            return
+        }
+        iconView.visibility = View.VISIBLE
         val drawable =
             when (icon) {
                 is Icon.Loaded -> icon.drawable.mutate()

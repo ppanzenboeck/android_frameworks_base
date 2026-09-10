@@ -93,6 +93,7 @@ import com.android.keyguard.KeyguardUpdateMonitorCallback;
 import com.android.keyguard.TrustGrantFlags;
 import com.android.keyguard.logging.KeyguardLogger;
 import com.android.settingslib.Utils;
+import com.android.internal.os.PowerProfile;
 import com.android.settingslib.fuelgauge.BatteryStatus;
 import com.android.systemui.Flags;
 import com.android.systemui.biometrics.AuthController;
@@ -252,6 +253,10 @@ public class KeyguardIndicationController {
     private boolean mHasDashCharger;
     private boolean mHasWarpCharger;
     private boolean mHasVoocCharger;
+    private boolean mHasSuperVoocCharger;
+    private final boolean mHasDualCellBattery;
+    private final boolean mShouldDoubleFastChargeVoltage;
+    private boolean mIsBypassChargingActive;
     private boolean mInited;
     private boolean mFaceDetectionRunning;
 
@@ -454,6 +459,12 @@ public class KeyguardIndicationController {
                 com.android.internal.R.bool.config_hasWarpCharger);
         mHasVoocCharger = mContext.getResources().getBoolean(
                 com.android.internal.R.bool.config_hasVoocCharger);
+        mHasSuperVoocCharger = mContext.getResources().getBoolean(
+                com.android.internal.R.bool.config_hasSuperVoocCharger);
+        mHasDualCellBattery = mContext.getResources().getBoolean(
+                R.bool.config_hasDualCellBattery);
+        mShouldDoubleFastChargeVoltage = mContext.getResources().getBoolean(
+                R.bool.config_shouldDoubleFastChargeVoltage);
     }
 
     /** Call this after construction to finish setting up the instance. */
@@ -1375,6 +1386,10 @@ public class KeyguardIndicationController {
                         chargingId = hasChargingTime
                                 ? R.string.keyguard_indication_vooc_charging_time
                                 : R.string.keyguard_plugged_in_vooc_charging;
+                    } else if (mHasSuperVoocCharger) {
+                        chargingId = hasChargingTime
+                                ? R.string.keyguard_indication_supervooc_charging_time
+                                : R.string.keyguard_plugged_in_supervooc_charging;
                     } else {
                         chargingId = hasChargingTime
                                 ? R.string.keyguard_indication_turbo_power_time
@@ -1411,6 +1426,10 @@ public class KeyguardIndicationController {
                     : R.string.keyguard_plugged_in;
         }
 
+        if (mIsBypassChargingActive || isBypassChargingActive()) {
+            chargingId = R.string.keyguard_plugged_in_bypass_charging;
+        }
+
         String batteryInfo = "";
         boolean showbatteryInfo = Settings.System.getIntForUser(mContext.getContentResolver(),
                 Settings.System.LOCKSCREEN_BATTERY_INFO, 1, UserHandle.USER_CURRENT) == 1;
@@ -1423,9 +1442,20 @@ public class KeyguardIndicationController {
                 chargingDetails.add(String.format(Locale.US, "%.0f",
                         (mChargingCurrent / (float) mCurrentDivider)) + "mA");
             }
+            float wattage = 0;
+            if (mChargingWattage > 0) {
+                wattage = mChargingWattage / (float) mCurrentDivider / 1000f;
+            } else if (mChargingCurrent > 0 && mChargingVoltage > 0) {
+                float curA = mChargingCurrent / (float) mCurrentDivider / 1000f;
+                float volV = (float) (mChargingVoltage / 1000000f) * ((mShouldDoubleFastChargeVoltage && mIsOemCharging) ? 2f : 1f);
+                wattage = curA * volV;
+            }
+            if (wattage > 0) {
+                chargingDetails.add(String.format(Locale.US, "%.1f", wattage) + "W");
+            }
             if (mChargingVoltage > 0) {
-                chargingDetails.add(String.format(Locale.US, "%.1f",
-                        (mChargingVoltage / 1000000f)) + "V");
+                float voltage = (float) (mChargingVoltage / 1000000f) * ((mShouldDoubleFastChargeVoltage && mIsOemCharging) ? 2f : 1f);
+                chargingDetails.add(String.format(Locale.US, "%.1f", voltage) + "V");
             }
             if (mTemperature > 0) {
                 chargingDetails.add(String.format(Locale.US, "%.1f",
@@ -1582,10 +1612,12 @@ public class KeyguardIndicationController {
          */
         @Override
         public void onRefreshBatteryInfo(BatteryStatus status) {
+            mIsBypassChargingActive = Settings.Global.getInt(
+                    mContext.getContentResolver(), "bypass_charge_active", 0) == 1;
             boolean isChargingOrFull = status.status == BatteryManager.BATTERY_STATUS_CHARGING
                     || status.isCharged();
             boolean wasPluggedIn = mPowerPluggedIn;
-            mPowerPluggedInWired = status.isPluggedInWired() && isChargingOrFull;
+            mPowerPluggedInWired = status.isPluggedInWired() && (isChargingOrFull || mIsBypassChargingActive);
             mPowerPluggedInWireless = status.isPluggedInWireless() && isChargingOrFull;
             mPowerPluggedInDock = status.isPluggedInDock() && isChargingOrFull;
             mPowerPluggedIn = isPowerPluggedIn(status, isChargingOrFull);
@@ -1593,6 +1625,9 @@ public class KeyguardIndicationController {
             mChargingCurrent = status.maxChargingCurrent;
             mChargingVoltage = status.maxChargingVoltage;
             mChargingWattage = status.maxChargingWattage;
+            if (mShouldDoubleFastChargeVoltage && mIsOemCharging && mChargingWattage > 0) {
+                mChargingWattage *= 2;
+            }
             mChargingSpeed = status.getChargingSpeed(mContext);
             mTemperature = status.temperature;
             mChargingStatus = status.chargingStatus;
@@ -1610,10 +1645,51 @@ public class KeyguardIndicationController {
                 mKeyguardLogger.log(TAG, ERROR, "Error calling IBatteryStats", e);
                 mChargingTimeRemaining = -1;
             }
+            if (mChargingTimeRemaining <= 0 && mPowerPluggedIn && mBatteryLevel > 0 && mBatteryLevel < 100) {
+                mChargingTimeRemaining = calculateEstimatedChargeTimeRemainingMs();
+            }
 
             mKeyguardLogger.logRefreshBatteryInfo(isChargingOrFull, mPowerPluggedIn, mBatteryLevel,
                     mBatteryDefender);
             updateDeviceEntryIndication(!wasPluggedIn && mPowerPluggedInWired);
+        }
+
+        private long calculateEstimatedChargeTimeRemainingMs() {
+            if (mBatteryLevel <= 0 || mBatteryLevel >= 100) {
+                return -1;
+            }
+            float currentMa = mChargingCurrent > 0 ? (mChargingCurrent / (float) mCurrentDivider) : 0;
+            if (currentMa <= 0 && mChargingWattage > 0) {
+                currentMa = ((mChargingWattage / (float) mCurrentDivider / 1000f) / 4.0f) * 1000f;
+            }
+            if (mIsOemCharging && currentMa < 2000f) {
+                currentMa = 3000f;
+            } else if (currentMa <= 50f) {
+                return -1;
+            }
+
+            double batteryCapacityMah = 0;
+            try {
+                PowerProfile powerProfile = new PowerProfile(mContext);
+                batteryCapacityMah = powerProfile.getBatteryCapacity();
+            } catch (Exception ignored) {
+            }
+            if (batteryCapacityMah <= 0) {
+                batteryCapacityMah = 6000;
+            }
+            if (mHasDualCellBattery && mIsOemCharging) {
+                batteryCapacityMah /= 2.0;
+            }
+
+            double ccPercent = mBatteryLevel < 80 ? (80 - mBatteryLevel) : 0;
+            double cvPercent = mBatteryLevel < 80 ? 20 : (100 - mBatteryLevel);
+
+            double ccMah = batteryCapacityMah * (ccPercent / 100.0);
+            double cvMah = batteryCapacityMah * (cvPercent / 100.0);
+
+            double hours = (ccMah / currentMa) + (cvMah / (currentMa * 0.6));
+            long timeRemainingMs = (long) (hours * 3600.0 * 1000.0);
+            return timeRemainingMs > 0 ? timeRemainingMs : -1;
         }
 
         @Override
@@ -1882,9 +1958,13 @@ public class KeyguardIndicationController {
         return status.isBatteryDefender();
     }
 
+    private boolean isBypassChargingActive() {
+        return Settings.Global.getInt(mContext.getContentResolver(), "bypass_charge_active", 0) == 1;
+    }
+
     /** Return true if the device has power plugged in. */
     protected boolean isPowerPluggedIn(BatteryStatus status, boolean isChargingOrFull) {
-        return status.isPluggedIn() && isChargingOrFull;
+        return status.isPluggedIn() && (isChargingOrFull || mIsBypassChargingActive || isBypassChargingActive());
     }
 
     private boolean isCurrentUser(int userId) {

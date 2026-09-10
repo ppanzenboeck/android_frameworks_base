@@ -24,4 +24,11 @@
 
     <!-- Charging info current divider, if needed -->
     <integer name="config_currentInfoDivider" translatable="false">1000</integer>
+
+    <!-- Whether device has a dual-cell battery architecture -->
+    <bool name="config_hasDualCellBattery">false</bool>
+
+    <!-- Whether OEM fast charge voltage and wattage should be doubled in software
+         (e.g., on legacy kernels where the battery fuel gauge only reports single-cell voltage) -->
+    <bool name="config_shouldDoubleFastChargeVoltage">false</bool>
 </resources>

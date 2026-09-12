@@ -480,6 +480,7 @@ public final class BatteryService extends SystemService {
                 com.android.internal.R.bool.config_hasDashCharger) ||
                 mContext.getResources().getBoolean(com.android.internal.R.bool.config_hasWarpCharger) ||
                 mContext.getResources().getBoolean(com.android.internal.R.bool.config_hasVoocCharger) ||
+                mContext.getResources().getBoolean(com.android.internal.R.bool.config_hasSuperVoocCharger) ||
                 mContext.getResources().getBoolean(com.android.internal.R.bool.config_hasTurboPowerCharger);
 
         mCriticalBatteryLevel = mContext.getResources().getInteger(
@@ -1080,11 +1081,29 @@ public final class BatteryService extends SystemService {
                 BatteryManager.EXTRA_TEMPERATURE, mHealthInfo.batteryTemperatureTenthsCelsius);
         intent.putExtra(BatteryManager.EXTRA_TECHNOLOGY, mHealthInfo.batteryTechnology);
         intent.putExtra(BatteryManager.EXTRA_INVALID_CHARGER, mInvalidCharger);
+        int maxChargingCurrent = mHealthInfo.maxChargingCurrentMicroamps;
+        if (maxChargingCurrent <= 0 && mPlugType != BATTERY_PLUGGED_NONE) {
+            int currentVal = mHealthInfo.batteryCurrentMicroamps != 0
+                    ? Math.abs(mHealthInfo.batteryCurrentMicroamps)
+                    : Math.abs(mHealthInfo.batteryCurrentAverageMicroamps);
+            if (currentVal > 0) {
+                if (currentVal < 10000) {
+                    currentVal *= 1000;
+                }
+                maxChargingCurrent = currentVal;
+            }
+        }
         intent.putExtra(
-                BatteryManager.EXTRA_MAX_CHARGING_CURRENT, mHealthInfo.maxChargingCurrentMicroamps);
+                BatteryManager.EXTRA_MAX_CHARGING_CURRENT, maxChargingCurrent);
+
+        int maxChargingVoltage = mHealthInfo.maxChargingVoltageMicrovolts;
+        if (maxChargingVoltage <= 0 && mPlugType != BATTERY_PLUGGED_NONE) {
+            if (mHealthInfo.batteryVoltageMillivolts > 0) {
+                maxChargingVoltage = mHealthInfo.batteryVoltageMillivolts * 1000;
+            }
+        }
         intent.putExtra(
-                BatteryManager.EXTRA_MAX_CHARGING_VOLTAGE,
-                mHealthInfo.maxChargingVoltageMicrovolts);
+                BatteryManager.EXTRA_MAX_CHARGING_VOLTAGE, maxChargingVoltage);
         intent.putExtra(BatteryManager.EXTRA_CHARGE_COUNTER, mHealthInfo.batteryChargeCounterUah);
         intent.putExtra(BatteryManager.EXTRA_CYCLE_COUNT, mHealthInfo.batteryCycleCount);
         intent.putExtra(BatteryManager.EXTRA_CHARGING_STATUS, mHealthInfo.chargingState);
@@ -1237,27 +1256,45 @@ public final class BatteryService extends SystemService {
                 com.android.internal.R.string.config_oemFastChargerStatusPath);
         String path2 = mContext.getResources().getString(
                 com.android.internal.R.string.config_oemFastChargerStatusPath2);
-        if (TextUtils.isEmpty(path) && TextUtils.isEmpty(path2))
-            return false;
         String value = mContext.getResources().getString(
                 com.android.internal.R.string.config_oemFastChargerStatusValue);
-        if (TextUtils.isEmpty(value))
+        if (TextUtils.isEmpty(value)) {
             value = "1";
-        try {
-            boolean isFastCharge = false;
-            boolean isFastCharge2 = false;
-            if (!TextUtils.isEmpty(path)) {
-                isFastCharge = FileUtils.readTextFile(new File(path), value.length(), null).equals(value);
-            }
-            if (!TextUtils.isEmpty(path2)) {
-                isFastCharge2 = FileUtils.readTextFile(new File(path2), value.length(), null).equals(value);
-            }
-            return isFastCharge || isFastCharge2;
-        } catch (IOException e) {
-            Slog.e(TAG, "Failed to read oem fast charger status path: "
-                    + path + " " + path2);
         }
-        return false;
+
+        return isOemChargerActive(path, value) || isOemChargerActive(path2, value);
+    }
+
+    private boolean isOemChargerActive(String path, String expectedValue) {
+        if (TextUtils.isEmpty(path)) {
+            return false;
+        }
+        File file = new File(path);
+        if (!file.exists()) {
+            return false;
+        }
+        try {
+            String text = FileUtils.readTextFile(file, 32, null);
+            if (text == null) return false;
+            text = text.trim();
+            if (expectedValue.contains(",")) {
+                for (String part : expectedValue.split(",")) {
+                    if (text.equalsIgnoreCase(part.trim())) {
+                        return true;
+                    }
+                }
+                return false;
+            }
+            if (expectedValue.equals("!0") || expectedValue.equals(">=1")) {
+                try {
+                    return Integer.parseInt(text) >= 1;
+                } catch (NumberFormatException ignored) {}
+            }
+            return text.equalsIgnoreCase(expectedValue);
+        } catch (IOException e) {
+            Slog.e(TAG, "Failed to read OEM fast charger status path: " + path, e);
+            return false;
+        }
     }
 
     // TODO: Current code doesn't work since "--unplugged" flag in BSS was purposefully removed.

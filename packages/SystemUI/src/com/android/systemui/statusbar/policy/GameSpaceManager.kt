@@ -40,6 +40,7 @@ import javax.inject.Inject
 class GameSpaceManager @Inject constructor(
     private val context: Context,
     private val keyguardStateController: KeyguardStateController,
+    private val bypassChargingController: BypassChargingController,
 ) {
     private val handler by lazy { GameSpaceHandler(Looper.getMainLooper()) }
     private val taskManager by lazy { ActivityTaskManager.getService() }
@@ -102,6 +103,7 @@ class GameSpaceManager @Inject constructor(
     private fun dispatchForegroundApp() {
         val pm = context.getSystemService(Context.POWER_SERVICE) as PowerManager
         if (!pm.isInteractive && activeGame != null) return
+        bypassChargingController.setGameActive(activeGame != null)
         val action = if (activeGame != null) ACTION_GAME_START else ACTION_GAME_STOP
         Intent(action).apply {
             setPackage(GAMESPACE_PACKAGE)
@@ -116,6 +118,7 @@ class GameSpaceManager @Inject constructor(
     }
 
     fun observe() {
+        bypassChargingController.start()
         val taskStackChangeListeners = TaskStackChangeListeners.getInstance();
         if (isRegistered) {
             taskStackChangeListeners.unregisterTaskStackListener(taskStackChangeListener)

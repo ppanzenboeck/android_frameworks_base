@@ -89,6 +89,9 @@ public class BypassChargingController {
     @Inject
     public BypassChargingController(Context context) {
         mContext = context;
+        if (isSupported()) {
+            start();
+        }
     }
 
     public void start() {
@@ -116,6 +119,11 @@ public class BypassChargingController {
         Intent initial = mContext.registerReceiver(mPowerReceiver, powerFilter, Context.RECEIVER_NOT_EXPORTED);
         if (initial != null) {
             mIsPluggedIn = initial.getIntExtra(BatteryManager.EXTRA_PLUGGED, 0) != 0;
+        } else {
+            BatteryManager bm = mContext.getSystemService(BatteryManager.class);
+            if (bm != null) {
+                mIsPluggedIn = bm.isCharging();
+            }
         }
 
         updateBypassState();
@@ -173,7 +181,11 @@ public class BypassChargingController {
     }
 
     private boolean isPowerConnected() {
-        return mIsPluggedIn;
+        if (mIsPluggedIn) {
+            return true;
+        }
+        BatteryManager bm = mContext.getSystemService(BatteryManager.class);
+        return bm != null && bm.isCharging();
     }
 
     private void enableBypass() {

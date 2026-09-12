@@ -681,7 +681,8 @@ public class CentralSurfacesImpl implements CoreStartable, CentralSurfaces,
             BurnInProtectionController burnInProtectionController,
             MediaViewController mediaViewController,
             PulseViewController pulseViewController,
-            EdgeLightViewController edgeLightViewController
+            EdgeLightViewController edgeLightViewController,
+            GameSpaceManager gameSpaceManager
     ) {
         mContext = context;
         mNotificationsController = notificationsController;
@@ -788,7 +789,7 @@ public class CentralSurfacesImpl implements CoreStartable, CentralSurfaces,
         mActivityIntentHelper = new ActivityIntentHelper(mContext);
         mActivityTransitionAnimator = activityTransitionAnimator;
 
-        mGameSpaceManager = new GameSpaceManager(mContext, mKeyguardStateController);
+        mGameSpaceManager = gameSpaceManager;
 
         // TODO(b/190746471): Find a better home for this.
         DateTimeView.setReceiverHandler(timeTickHandler);

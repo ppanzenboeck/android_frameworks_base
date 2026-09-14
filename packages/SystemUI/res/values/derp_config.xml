@@ -24,4 +24,10 @@
 
     <!-- Charging info current divider, if needed -->
     <integer name="config_currentInfoDivider" translatable="false">1000</integer>
+
+    <!-- Whether device has dual-cell battery configuration in series -->
+    <bool name="config_hasDualCellBattery">false</bool>
+
+    <!-- Whether to double fast charging voltage for telemetry (dual-cell series) -->
+    <bool name="config_shouldDoubleFastChargeVoltage">false</bool>
 </resources>

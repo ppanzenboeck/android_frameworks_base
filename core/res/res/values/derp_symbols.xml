@@ -102,6 +102,9 @@
     <!-- Whether device has VOOC charging support -->
     <java-symbol type="bool" name="config_hasVoocCharger" />
 
+    <!-- Whether device has SuperVOOC charging support -->
+    <java-symbol type="bool" name="config_hasSuperVoocCharger" />
+
     <!-- Whether device has turbo power charging support -->
     <java-symbol type="bool" name="config_hasTurboPowerCharger" />
 

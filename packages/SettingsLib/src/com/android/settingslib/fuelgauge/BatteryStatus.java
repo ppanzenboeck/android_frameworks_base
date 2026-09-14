@@ -31,6 +31,7 @@ import static android.os.BatteryManager.EXTRA_TEMPERATURE;
 import static android.os.BatteryManager.EXTRA_PLUGGED;
 import static android.os.BatteryManager.EXTRA_PRESENT;
 import static android.os.BatteryManager.EXTRA_STATUS;
+import static android.os.BatteryManager.EXTRA_VOLTAGE;
 import static android.os.OsProtoEnums.BATTERY_PLUGGED_NONE;
 
 import android.content.Context;
@@ -121,7 +122,12 @@ public class BatteryStatus {
         int maxChargingMicroVolt = batteryChangedIntent.getIntExtra(EXTRA_MAX_CHARGING_VOLTAGE, -1);
 
         if (maxChargingMicroVolt <= 0) {
-            maxChargingMicroVolt = DEFAULT_CHARGING_VOLTAGE_MICRO_VOLT;
+            int voltMv = batteryChangedIntent.getIntExtra(EXTRA_VOLTAGE, -1);
+            if (voltMv > 0) {
+                maxChargingMicroVolt = voltMv * 1000;
+            } else {
+                maxChargingMicroVolt = DEFAULT_CHARGING_VOLTAGE_MICRO_VOLT;
+            }
         }
         if (maxChargingMicroAmp > 0) {
             // Calculating muW = muA * muV / (10^6 mu^2 / mu); splitting up the divisor
@@ -132,7 +138,7 @@ public class BatteryStatus {
         } else {
             maxChargingWattage = -1;
             maxChargingCurrent = -1;
-            maxChargingVoltage = -1;
+            maxChargingVoltage = isPluggedIn(plugged) ? maxChargingMicroVolt : -1;
         }
     }
 

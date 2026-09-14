@@ -1431,27 +1431,38 @@ public class KeyguardIndicationController {
                 Settings.System.LOCKSCREEN_BATTERY_INFO, 1, UserHandle.USER_CURRENT) == 1;
         if (showbatteryInfo) {
             List<String> chargingDetails = new ArrayList<>();
-            if (mChargingCurrent >= mCurrentDivider * 1000) {
-                chargingDetails.add(String.format(Locale.US, "%.1f",
-                        (mChargingCurrent / (float) mCurrentDivider / 1000f)) + "A");
-            } else if (mChargingCurrent > 0) {
-                chargingDetails.add(String.format(Locale.US, "%.0f",
-                        (mChargingCurrent / (float) mCurrentDivider)) + "mA");
+
+            float curA = 0;
+            if (mChargingCurrent > 0) {
+                curA = mChargingCurrent / (float) mCurrentDivider / 1000f;
+            } else if (mIsOemCharging) {
+                curA = 3.0f;
             }
+
+            float voltage = 0;
+            if (mChargingVoltage > 0) {
+                voltage = (float) (mChargingVoltage / 1000000f) * ((mShouldDoubleFastChargeVoltage && mIsOemCharging) ? 2f : 1f);
+            } else if (mIsOemCharging) {
+                voltage = 5.0f * (mShouldDoubleFastChargeVoltage ? 2f : 1f);
+            }
+
             float wattage = 0;
             if (mChargingWattage > 0) {
                 wattage = mChargingWattage / (float) mCurrentDivider / 1000f;
-            } else if (mChargingCurrent > 0 && mChargingVoltage > 0) {
-                float curA = mChargingCurrent / (float) mCurrentDivider / 1000f;
-                float volV = (float) (mChargingVoltage / 1000000f) * ((mShouldDoubleFastChargeVoltage && mIsOemCharging) ? 2f : 1f);
-                wattage = curA * volV;
+            } else if (curA > 0 && voltage > 0) {
+                wattage = curA * voltage;
+            }
+
+            if (voltage > 0) {
+                chargingDetails.add(String.format(Locale.US, "%.1f", voltage) + "V");
+            }
+            if (curA >= 1.0f) {
+                chargingDetails.add(String.format(Locale.US, "%.1f", curA) + "A");
+            } else if (curA > 0) {
+                chargingDetails.add(String.format(Locale.US, "%.0f", curA * 1000f) + "mA");
             }
             if (wattage > 0) {
                 chargingDetails.add(String.format(Locale.US, "%.1f", wattage) + "W");
-            }
-            if (mChargingVoltage > 0) {
-                float voltage = (float) (mChargingVoltage / 1000000f) * ((mShouldDoubleFastChargeVoltage && mIsOemCharging) ? 2f : 1f);
-                chargingDetails.add(String.format(Locale.US, "%.1f", voltage) + "V");
             }
             if (mTemperature > 0) {
                 chargingDetails.add(String.format(Locale.US, "%.1f",

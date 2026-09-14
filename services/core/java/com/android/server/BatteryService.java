@@ -1086,6 +1086,9 @@ public final class BatteryService extends SystemService {
             int currentVal = mHealthInfo.batteryCurrentMicroamps != 0
                     ? Math.abs(mHealthInfo.batteryCurrentMicroamps)
                     : Math.abs(mHealthInfo.batteryCurrentAverageMicroamps);
+            if (currentVal <= 0) {
+                currentVal = getFallbackChargingCurrent();
+            }
             if (currentVal > 0) {
                 if (currentVal < 10000) {
                     currentVal *= 1000;
@@ -1295,6 +1298,31 @@ public final class BatteryService extends SystemService {
             Slog.e(TAG, "Failed to read OEM fast charger status path: " + path, e);
             return false;
         }
+    }
+
+    private int getFallbackChargingCurrent() {
+        final String[] currentPaths = {
+            "/sys/class/power_supply/battery/current_now",
+            "/sys/class/oplus_chg/battery/current_now",
+            "/sys/class/power_supply/bms/current_now",
+            "/sys/class/power_supply/usb/current_now",
+        };
+        for (String path : currentPaths) {
+            File file = new File(path);
+            if (file.exists()) {
+                try {
+                    String text = FileUtils.readTextFile(file, 32, null);
+                    if (text != null) {
+                        int val = Math.abs(Integer.parseInt(text.trim()));
+                        if (val > 0) {
+                            return val;
+                        }
+                    }
+                } catch (Exception ignored) {
+                }
+            }
+        }
+        return 0;
     }
 
     // TODO: Current code doesn't work since "--unplugged" flag in BSS was purposefully removed.

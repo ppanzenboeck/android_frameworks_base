@@ -314,6 +314,11 @@ public final class BatteryService extends SystemService {
 
     private boolean mOemCharger;
     private boolean mHasOemCharger;
+    private boolean mHasSuperVoocCharger;
+    private boolean mHasWarpCharger;
+    private boolean mHasDashCharger;
+    private boolean mHasVoocCharger;
+    private boolean mHasTurboPowerCharger;
     private boolean mLastOemCharger;
 
     private long mDischargeStartTime;
@@ -476,12 +481,18 @@ public final class BatteryService extends SystemService {
         mBatteryStats = BatteryStatsService.getService();
         mActivityManagerInternal = LocalServices.getService(ActivityManagerInternal.class);
 
-        mHasOemCharger = mContext.getResources().getBoolean(
-                com.android.internal.R.bool.config_hasDashCharger) ||
-                mContext.getResources().getBoolean(com.android.internal.R.bool.config_hasWarpCharger) ||
-                mContext.getResources().getBoolean(com.android.internal.R.bool.config_hasVoocCharger) ||
-                mContext.getResources().getBoolean(com.android.internal.R.bool.config_hasSuperVoocCharger) ||
-                mContext.getResources().getBoolean(com.android.internal.R.bool.config_hasTurboPowerCharger);
+        mHasDashCharger = mContext.getResources().getBoolean(
+                com.android.internal.R.bool.config_hasDashCharger);
+        mHasWarpCharger = mContext.getResources().getBoolean(
+                com.android.internal.R.bool.config_hasWarpCharger);
+        mHasVoocCharger = mContext.getResources().getBoolean(
+                com.android.internal.R.bool.config_hasVoocCharger);
+        mHasSuperVoocCharger = mContext.getResources().getBoolean(
+                com.android.internal.R.bool.config_hasSuperVoocCharger);
+        mHasTurboPowerCharger = mContext.getResources().getBoolean(
+                com.android.internal.R.bool.config_hasTurboPowerCharger);
+        mHasOemCharger = mHasDashCharger || mHasWarpCharger || mHasVoocCharger
+                || mHasSuperVoocCharger || mHasTurboPowerCharger;
 
         mCriticalBatteryLevel = mContext.getResources().getInteger(
                 com.android.internal.R.integer.config_criticalBatteryWarningLevel);
@@ -1082,19 +1093,32 @@ public final class BatteryService extends SystemService {
         intent.putExtra(BatteryManager.EXTRA_TECHNOLOGY, mHealthInfo.batteryTechnology);
         intent.putExtra(BatteryManager.EXTRA_INVALID_CHARGER, mInvalidCharger);
         int maxChargingCurrent = mHealthInfo.maxChargingCurrentMicroamps;
-        if (maxChargingCurrent <= 0 && mPlugType != BATTERY_PLUGGED_NONE) {
+        if ((maxChargingCurrent < 100 || (mOemCharger && maxChargingCurrent < 2000000))
+                && mPlugType != BATTERY_PLUGGED_NONE) {
             int currentVal = mHealthInfo.batteryCurrentMicroamps != 0
                     ? Math.abs(mHealthInfo.batteryCurrentMicroamps)
                     : Math.abs(mHealthInfo.batteryCurrentAverageMicroamps);
-            if (currentVal <= 0) {
+            if (currentVal < 100) {
                 currentVal = getFallbackChargingCurrent();
             }
-            if (currentVal > 0) {
+            if (currentVal >= 100) {
                 if (currentVal < 10000) {
                     currentVal *= 1000;
                 }
                 maxChargingCurrent = currentVal;
+            } else if (mOemCharger) {
+                if (mHasSuperVoocCharger) {
+                    maxChargingCurrent = 6500000;
+                } else if (mHasWarpCharger) {
+                    maxChargingCurrent = 4500000;
+                } else if (mHasDashCharger || mHasVoocCharger) {
+                    maxChargingCurrent = 3500000;
+                } else {
+                    maxChargingCurrent = 3000000;
+                }
             }
+        } else if (maxChargingCurrent >= 100 && maxChargingCurrent < 10000) {
+            maxChargingCurrent *= 1000;
         }
         intent.putExtra(
                 BatteryManager.EXTRA_MAX_CHARGING_CURRENT, maxChargingCurrent);
@@ -1103,6 +1127,8 @@ public final class BatteryService extends SystemService {
         if (maxChargingVoltage <= 0 && mPlugType != BATTERY_PLUGGED_NONE) {
             if (mHealthInfo.batteryVoltageMillivolts > 0) {
                 maxChargingVoltage = mHealthInfo.batteryVoltageMillivolts * 1000;
+            } else if (mOemCharger) {
+                maxChargingVoltage = 5000000;
             }
         }
         intent.putExtra(
@@ -1302,10 +1328,16 @@ public final class BatteryService extends SystemService {
 
     private int getFallbackChargingCurrent() {
         final String[] currentPaths = {
+            "/sys/class/power_supply/bms/current_now",
+            "/sys/class/power_supply/battery/input_current_settled",
+            "/sys/class/power_supply/battery/input_current_max",
+            "/proc/charger/input_current_now",
+            "/sys/class/oplus_chg/battery/sub_current",
+            "/sys/class/oplus_chg/battery/normal_current_now",
             "/sys/class/power_supply/battery/current_now",
             "/sys/class/oplus_chg/battery/current_now",
-            "/sys/class/power_supply/bms/current_now",
             "/sys/class/power_supply/usb/current_now",
+            "/sys/class/power_supply/usb/current_max",
         };
         for (String path : currentPaths) {
             File file = new File(path);
@@ -1314,7 +1346,7 @@ public final class BatteryService extends SystemService {
                     String text = FileUtils.readTextFile(file, 32, null);
                     if (text != null) {
                         int val = Math.abs(Integer.parseInt(text.trim()));
-                        if (val > 0) {
+                        if (val >= 100) {
                             return val;
                         }
                     }

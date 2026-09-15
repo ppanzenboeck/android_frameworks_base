@@ -1493,8 +1493,19 @@ public class KeyguardIndicationController {
             float curA = 0;
             if (mChargingCurrent > 0) {
                 curA = mChargingCurrent / (float) mCurrentDivider / 1000f;
-            } else if (mIsOemCharging) {
-                curA = 3.0f;
+            }
+            if (mIsOemCharging && curA < 2.0f) {
+                if (mHasSuperVoocCharger) {
+                    curA = 6.5f;
+                } else if (mHasWarpCharger) {
+                    curA = 4.5f;
+                } else if (mHasDashCharger || mHasVoocCharger) {
+                    curA = 3.5f;
+                } else {
+                    curA = 3.0f;
+                }
+            } else if (!mIsOemCharging && curA < 0.05f) {
+                curA = 0;
             }
 
             float voltage = 0;
@@ -1505,10 +1516,10 @@ public class KeyguardIndicationController {
             }
 
             float wattage = 0;
-            if (mChargingWattage > 0) {
-                wattage = mChargingWattage / (float) mCurrentDivider / 1000f;
-            } else if (curA > 0 && voltage > 0) {
+            if (curA > 0 && voltage > 0) {
                 wattage = curA * voltage;
+            } else if (mChargingWattage > 0) {
+                wattage = mChargingWattage / (float) mCurrentDivider / 1000f;
             }
 
             if (voltage > 0) {
@@ -1745,7 +1756,15 @@ public class KeyguardIndicationController {
                 currentMa = ((mChargingWattage / (float) mCurrentDivider / 1000f) / 4.0f) * 1000f;
             }
             if (mIsOemCharging && currentMa < 2000f) {
-                currentMa = 3000f;
+                if (mHasSuperVoocCharger) {
+                    currentMa = 6500f;
+                } else if (mHasWarpCharger) {
+                    currentMa = 4500f;
+                } else if (mHasDashCharger || mHasVoocCharger) {
+                    currentMa = 3500f;
+                } else {
+                    currentMa = 3000f;
+                }
             } else if (currentMa <= 50f) {
                 return -1;
             }

@@ -50,6 +50,7 @@ import android.app.compat.CompatChanges;
 import android.content.Context;
 import android.content.Intent;
 import android.content.res.Configuration;
+import android.database.ContentObserver;
 import android.graphics.PointF;
 import android.graphics.Rect;
 import android.graphics.Region;
@@ -60,6 +61,7 @@ import android.os.IBinder;
 import android.os.Looper;
 import android.os.RemoteException;
 import android.os.UserHandle;
+import android.provider.Settings;
 import android.util.SparseArray;
 import android.view.Choreographer;
 import android.view.IWindowManager;
@@ -613,6 +615,19 @@ public class DesktopModeWindowDecorViewModel implements WindowDecorViewModel,
             return Unit.INSTANCE;
         });
         mLockTaskChangeListener.addListener(this);
+        mContext.getContentResolver().registerContentObserver(
+                Settings.Global.getUriFor("desktop_mode_pill_style"),
+                false,
+                new ContentObserver(mMainHandler) {
+                    @Override
+                    public void onChange(boolean selfChange) {
+                        forAllWindowDecorations(decoration -> {
+                            final RunningTaskInfo taskInfo = decoration.getTaskInfo();
+                            decoration.relayout(taskInfo, decoration.getHasGlobalFocus(),
+                                    decoration.getExclusionRegion());
+                        });
+                    }
+                });
     }
 
     @Override

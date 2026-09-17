@@ -764,7 +764,7 @@ public class QuickSettingsControllerImpl implements QuickSettingsController, Dum
         if (getExpanded()) {
             return onHeader || (yDiff < 0 && isTouchInQsArea(x, y));
         } else {
-            return onHeader;
+            return onHeader || (yDiff > mTouchSlop);
         }
     }
 

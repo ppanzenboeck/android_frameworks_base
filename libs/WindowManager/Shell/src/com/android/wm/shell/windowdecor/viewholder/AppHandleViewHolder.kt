@@ -24,6 +24,8 @@ import android.graphics.Point
 import android.hardware.input.InputManager
 import android.os.Bundle
 import android.os.Handler
+import android.provider.Settings
+import android.util.TypedValue
 import android.view.InsetsFlags
 import android.view.LayoutInflater
 import android.view.MotionEvent.ACTION_DOWN
@@ -36,6 +38,7 @@ import android.view.accessibility.AccessibilityEvent
 import android.view.accessibility.AccessibilityNodeInfo
 import android.view.accessibility.AccessibilityNodeInfo.AccessibilityAction
 import android.widget.ImageButton
+import android.widget.ImageView
 import android.window.DesktopExperienceFlags
 import android.window.DesktopModeFlags
 import androidx.core.view.ViewCompat
@@ -149,6 +152,7 @@ class AppHandleViewHolder(
                     }
                 }
         }
+        updatePillStyle()
     }
 
     override fun bindData(data: HandleData) {
@@ -160,6 +164,7 @@ class AppHandleViewHolder(
             data.showInputLayer,
             data.isCaptionVisible,
         )
+        updatePillStyle()
     }
 
     private fun bindData(
@@ -202,7 +207,55 @@ class AppHandleViewHolder(
     }
 
     override fun onHandleMenuClosed() {
-        animator.animateCaptionHandleAlpha(startValue = 0f, endValue = 1f)
+        val style = try {
+            Settings.Global.getInt(context.contentResolver, "desktop_mode_pill_style", 1)
+        } catch (e: Exception) {
+            1
+        }
+        if (style != 0) {
+            animator.animateCaptionHandleAlpha(startValue = 0f, endValue = 1f)
+        }
+    }
+
+    fun updatePillStyle() {
+        try {
+            val style = Settings.Global.getInt(
+                context.contentResolver, "desktop_mode_pill_style", 1
+            )
+            val padVert = TypedValue.applyDimension(
+                TypedValue.COMPLEX_UNIT_DIP, 16f, context.resources.displayMetrics
+            ).toInt()
+            val padHorz = TypedValue.applyDimension(
+                TypedValue.COMPLEX_UNIT_DIP, 10f, context.resources.displayMetrics
+            ).toInt()
+            when (style) {
+                0 -> {
+                    captionHandle.alpha = 0.0f
+                }
+                2 -> {
+                    captionHandle.alpha = 1.0f
+                    captionHandle.setBackgroundResource(android.R.color.transparent)
+                    captionHandle.setImageResource(R.drawable.ic_desktop_pill_dots)
+                    captionHandle.setPadding(0, 0, 0, 0)
+                    captionHandle.scaleType = ImageView.ScaleType.FIT_CENTER
+                }
+                1 -> {
+                    captionHandle.alpha = 1.0f
+                    captionHandle.setBackgroundResource(android.R.color.transparent)
+                    captionHandle.setImageResource(R.drawable.decor_handle_dark)
+                    captionHandle.setPadding(padHorz, padVert, padHorz, padVert)
+                    captionHandle.scaleType = ImageView.ScaleType.FIT_XY
+                }
+                else -> {
+                    captionHandle.alpha = 1.0f
+                    captionHandle.setBackgroundResource(android.R.color.transparent)
+                    captionHandle.setImageResource(R.drawable.decor_handle_dark)
+                    captionHandle.setPadding(padHorz, padVert, padHorz, padVert)
+                    captionHandle.scaleType = ImageView.ScaleType.FIT_XY
+                }
+            }
+        } catch (e: Exception) {
+        }
     }
 
     private fun createStatusBarInputLayer(

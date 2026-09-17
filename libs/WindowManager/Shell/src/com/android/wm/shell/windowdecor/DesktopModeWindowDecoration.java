@@ -41,6 +41,10 @@ import static com.android.wm.shell.windowdecor.DragResizeWindowGeometry.getResiz
 import static com.android.wm.shell.windowdecor.DragResizeWindowGeometry.getResizeHandleEdgeInset;
 import static com.android.wm.shell.windowdecor.viewholder.AppHandleIdentifier.AppHandleWindowingMode;
 
+import android.provider.Settings;
+import android.util.TypedValue;
+import android.widget.ImageView;
+
 import android.annotation.NonNull;
 import android.annotation.Nullable;
 import android.app.ActivityManager;
@@ -468,6 +472,7 @@ public class DesktopModeWindowDecoration extends WindowDecoration<WindowDecorLin
         if (!applyTransactionOnDraw) {
             t.apply();
         }
+        updatePillStyle();
     }
 
     /**
@@ -624,6 +629,7 @@ public class DesktopModeWindowDecoration extends WindowDecoration<WindowDecorLin
         }
         updateDragResizeListenerIfNeeded(oldDecorationSurface, inFullImmersive);
         updateLayoutMenu(startT, inFullImmersive);
+        updatePillStyle();
         Trace.endSection(); // DesktopModeWindowDecoration#relayout
     }
 
@@ -996,6 +1002,7 @@ public class DesktopModeWindowDecoration extends WindowDecoration<WindowDecorLin
                 mResult.mCaptionHeight, /* showInputLayer= */ showInputLayer(),
                 /* isCaptionVisible= */ isCaptionVisible()
         ));
+        updatePillStyle();
     }
 
     /** Update the view holder for app header. */
@@ -2105,6 +2112,54 @@ public class DesktopModeWindowDecoration extends WindowDecoration<WindowDecorLin
 
         private void setUsed() {
             mUsed = true;
+        }
+    }
+
+    private void updatePillStyle() {
+        if (mResult.mRootView == null) return;
+
+        try {
+            View rawHandle = mResult.mRootView.findViewById(R.id.caption_handle);
+            if (!(rawHandle instanceof ImageButton)) {
+                return;
+            }
+            ImageButton handle = (ImageButton) rawHandle;
+
+            int style = Settings.Global.getInt(
+                    mContext.getContentResolver(), "desktop_mode_pill_style", 1);
+
+            //Log.d("DesktopModeFix", "Applying Pill Style: " + style);
+
+            int padVert = (int) TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, 16, 
+                    mContext.getResources().getDisplayMetrics());
+            int padHorz = (int) TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, 10, 
+                    mContext.getResources().getDisplayMetrics());
+
+            switch (style) {
+                case 0:
+                    handle.setAlpha(0.0f);
+                    break;
+                    
+                case 2:
+                    handle.setAlpha(1.0f);
+                    handle.setBackgroundResource(android.R.color.transparent);
+                    handle.setImageResource(R.drawable.ic_desktop_pill_dots);
+                    handle.setPadding(0, 0, 0, 0);
+                    handle.setScaleType(ImageView.ScaleType.FIT_CENTER);
+                    break;
+                    
+                case 1:
+                default:
+                    handle.setAlpha(1.0f);
+                    handle.setBackgroundResource(android.R.color.transparent);
+                    handle.setImageResource(R.drawable.decor_handle_dark);
+                    handle.setPadding(padHorz, padVert, padHorz, padVert);
+                    handle.setScaleType(ImageView.ScaleType.FIT_XY);
+                    break;
+            }
+
+        } catch (Exception e) {
+            //Log.e("DesktopModeFix", "CRASH CAUGHT! Here is the error:", e);
         }
     }
 }

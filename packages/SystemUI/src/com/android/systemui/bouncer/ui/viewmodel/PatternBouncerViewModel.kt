@@ -249,10 +249,10 @@ constructor(
         return selectedDotSet.value.map(PatternDotViewModel::toCoordinate)
     }
 
-    private fun defaultDots(): List<PatternDotViewModel> {
+    private fun defaultDots(size: Byte = columnCount): List<PatternDotViewModel> {
         return buildList {
-            (0 until columnCount).forEach { x ->
-                (0 until rowCount).forEach { y -> add(PatternDotViewModel(x = x, y = y)) }
+            (0 until size).forEach { x ->
+                (0 until size).forEach { y -> add(PatternDotViewModel(x = x, y = y)) }
             }
         }
     }

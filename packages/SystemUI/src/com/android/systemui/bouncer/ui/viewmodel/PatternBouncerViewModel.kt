@@ -61,6 +61,9 @@ constructor(
         bouncerHapticPlayer = bouncerHapticPlayer,
     ) {
 
+    /** The current pattern size. */
+    val patternSize: StateFlow<Byte> = interactor.patternSize
+
     /** The number of columns in the dot grid. */
     val columnCount: Byte
         get() = interactor.patternSize.value
@@ -112,6 +115,11 @@ constructor(
                         _readyToTryAuthenticate.value = (it.size > 1)
                         selectedDotList.value = it.toList()
                     }
+            }
+            launch {
+                interactor.patternSize.collect { size ->
+                    _dots.value = defaultDots(size)
+                }
             }
             awaitCancellation()
         }
@@ -226,10 +234,10 @@ constructor(
         return selectedDotSet.value.map(PatternDotViewModel::toCoordinate)
     }
 
-    private fun defaultDots(): List<PatternDotViewModel> {
+    private fun defaultDots(size: Byte = columnCount): List<PatternDotViewModel> {
         return buildList {
-            (0 until columnCount).forEach { x ->
-                (0 until rowCount).forEach { y -> add(PatternDotViewModel(x = x, y = y)) }
+            (0 until size).forEach { x ->
+                (0 until size).forEach { y -> add(PatternDotViewModel(x = x, y = y)) }
             }
         }
     }

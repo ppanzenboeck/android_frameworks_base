@@ -244,12 +244,15 @@ public class LockPatternView extends View {
             return column;
         }
 
-        public static Cell of(int row, int column, byte size) {
+        public static synchronized Cell of(int row, int column, byte size) {
             checkRange(row, column, size);
+            if (sCells == null || sCells.length != size) {
+                updateSize(size);
+            }
             return sCells[row][column];
         }
 
-        public static void updateSize(byte size) {
+        public static synchronized void updateSize(byte size) {
             sCells = new Cell[size][size];
             for (int i = 0; i < size; i++) {
                 for (int j = 0; j < size; j++) {

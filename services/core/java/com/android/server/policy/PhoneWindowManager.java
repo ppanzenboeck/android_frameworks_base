@@ -666,6 +666,7 @@ public class PhoneWindowManager implements WindowManagerPolicy {
     boolean mWakeOnAppSwitchKeyPress;
     boolean mWakeOnCameraKeyPress;
     boolean mWakeOnVolumeKeyPress;
+    boolean mVolumeDoze;
 
     // During wakeup by volume keys, we still need to capture subsequent events
     // until the key is released. This is required since the beep sound is produced
@@ -1104,6 +1105,9 @@ public class PhoneWindowManager implements WindowManagerPolicy {
             resolver.registerContentObserver(Settings.System.getUriFor(
                      Settings.System.THREE_FINGER_GESTURE), false, this,
                      UserHandle.USER_ALL);
+            resolver.registerContentObserver(Settings.System.getUriFor(
+                    "volume_doze"), false, this,
+                    UserHandle.USER_ALL);
              resolver.registerContentObserver(Settings.System.getUriFor(
                      Settings.System.LOCKSCREEN_ENABLE_POWER_MENU), true, this,
                      UserHandle.USER_ALL);
@@ -3560,6 +3564,8 @@ public class PhoneWindowManager implements WindowManagerPolicy {
             mVolumeAnswerCall = (LineageSettings.System.getIntForUser(resolver,
                     LineageSettings.System.VOLUME_ANSWER_CALL, 0, UserHandle.USER_CURRENT) == 1)
                     && ((mDeviceHardwareWakeKeys & KEY_MASK_VOLUME) != 0);
+            mVolumeDoze = Settings.System.getIntForUser(resolver,
+                    "volume_doze", 0, UserHandle.USER_CURRENT) == 1;
 
             //Three Finger Gesture
             boolean threeFingerGesture = Settings.System.getIntForUser(resolver,
@@ -5403,7 +5409,8 @@ public class PhoneWindowManager implements WindowManagerPolicy {
                     // {@link interceptKeyBeforeDispatching()}.
                     result |= ACTION_PASS_TO_USER;
                 } else if ((result & ACTION_PASS_TO_USER) == 0 && !mWakeOnVolumeKeyPress) {
-                    if (mLineageButtons.handleVolumeKey(event, interactive)) {
+                    if ((!mVolumeDoze || AudioSystem.isStreamActive(AudioManager.STREAM_MUSIC, 0))
+                            && mLineageButtons.handleVolumeKey(event, interactive)) {
                         break;
                     }
 
@@ -5411,7 +5418,7 @@ public class PhoneWindowManager implements WindowManagerPolicy {
                     // handled it send it to the session manager to
                     // figure out.
                     MediaSessionLegacyHelper.getHelper(mContext).sendVolumeKeyEvent(
-                            event, AudioManager.USE_DEFAULT_STREAM_TYPE, true);
+                            event, AudioManager.USE_DEFAULT_STREAM_TYPE, !mVolumeDoze);
                 }
                 break;
             }

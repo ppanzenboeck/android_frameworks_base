@@ -594,7 +594,9 @@ public class VolumeDialogControllerImpl implements VolumeDialogController, Dumpa
         final boolean showSilentHint = (flags & AudioManager.FLAG_SHOW_SILENT_HINT) != 0;
 
         // Custom: Check if we should show UI on Doze
-        final boolean showDozeUI = mShowVolumeDialog && fromKey && !mDeviceInteractive;
+        final boolean volumeDozeEnabled = Settings.System.getIntForUser(
+                mContext.getContentResolver(), "volume_doze", 0, UserHandle.USER_CURRENT) == 1;
+        final boolean showDozeUI = volumeDozeEnabled && mShowVolumeDialog && fromKey && !mDeviceInteractive;
 
         boolean changed = false;
         boolean levelChanged = false;
@@ -942,9 +944,10 @@ public class VolumeDialogControllerImpl implements VolumeDialogController, Dumpa
     }
 
     private void launchDozePulse() {
-        //if (mAmbientConfig.pulseOnNotificationEnabled(UserHandle.USER_CURRENT)) {
-        mContext.sendBroadcastAsUser(new Intent(DOZE_INTENT), UserHandle.CURRENT);
-        //}
+        Intent intent = new Intent(DOZE_INTENT)
+                .setPackage(mContext.getPackageName())
+                .putExtra("ignoreProx", true);
+        mContext.sendBroadcastAsUser(intent, UserHandle.CURRENT);
     }
 
     private final class VC extends IVolumeController.Stub {

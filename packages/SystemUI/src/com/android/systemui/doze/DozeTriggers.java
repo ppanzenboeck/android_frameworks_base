@@ -771,7 +771,8 @@ public class DozeTriggers implements DozeMachine.Part {
         public void onReceive(Context context, Intent intent) {
             if (PULSE_ACTION.equals(intent.getAction())) {
                 if (DozeMachine.DEBUG) Log.d(TAG, "Received pulse intent");
-                requestPulse(DozeLog.PULSE_REASON_INTENT, false, /* performedProxCheck */
+                boolean ignoreProx = intent.getBooleanExtra("ignoreProx", false);
+                requestPulse(DozeLog.PULSE_REASON_INTENT, ignoreProx, /* performedProxCheck */
                         null /* onPulseSuppressedListener */);
             }
         }

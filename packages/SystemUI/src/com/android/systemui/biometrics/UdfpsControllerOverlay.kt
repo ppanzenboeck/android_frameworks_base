@@ -56,6 +56,7 @@ import com.android.systemui.dagger.qualifiers.Application
 import com.android.systemui.keyguard.domain.interactor.KeyguardTransitionInteractor
 import com.android.systemui.keyguard.shared.model.KeyguardState
 import com.android.systemui.power.domain.interactor.PowerInteractor
+import com.android.systemui.power.shared.model.WakefulnessState
 import com.android.systemui.res.R
 import com.android.systemui.scene.domain.interactor.SceneInteractor
 import com.android.systemui.shade.domain.interactor.ShadeInteractor
@@ -310,7 +311,11 @@ constructor(
                 }
                 windowManager.addView(view, coreLayoutParams.updateDimensions(animation))
             }
-        if (powerInteractor.detailedWakefulness.value.isAwake()) {
+        val wakefulness = powerInteractor.detailedWakefulness.value
+        val opticalKeyguardWhileAsleep = requestReason == REASON_AUTH_KEYGUARD
+                && overlayParams.sensorType == TYPE_UDFPS_OPTICAL
+                && wakefulness.internalWakefulnessState == WakefulnessState.ASLEEP
+        if (wakefulness.isAwake() || opticalKeyguardWhileAsleep) {
             addViewIfPending()
         } else {
             listenForCurrentKeyguardState?.cancel()
@@ -331,8 +336,8 @@ constructor(
 
     fun updateOverlayParams(updatedOverlayParams: UdfpsOverlayParams) {
         overlayParams = updatedOverlayParams
-        sensorBounds = updatedOverlayParams.sensorBounds
-        overlayTouchView?.sensorRect = updatedOverlayParams.sensorBounds
+        sensorBounds = Rect(updatedOverlayParams.sensorBounds)
+        overlayTouchView?.sensorRect = sensorBounds
         getTouchOverlay()?.let {
             if (addViewRunnable == null) {
                 // Only updateViewLayout if there's no pending view to add to WM.
@@ -457,8 +462,9 @@ constructor(
             return true
         }
 
-        // on the keyguard, make sure we don't rotate if we're going to sleep or not occluded
-        return !(keyguardUpdateMonitor.isGoingToSleep || !keyguardStateController.isOccluded)
+        // The keyguard can rotate too; keep its touch overlay aligned with the display.
+        // Avoid changing orientation during the transition to sleep.
+        return !keyguardUpdateMonitor.isGoingToSleep
     }
 }
 

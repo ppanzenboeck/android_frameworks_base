@@ -19,6 +19,7 @@ package com.android.systemui.statusbar.notification.stack.ui.viewmodel
 
 import android.annotation.SuppressLint
 import android.content.Context
+import android.view.Surface
 import android.view.View
 import android.view.WindowInsets.Type.defaultVisible
 import android.view.WindowInsets.Type.displayCutout
@@ -104,6 +105,7 @@ import com.android.systemui.scene.domain.interactor.SceneInteractor
 import com.android.systemui.scene.shared.flag.SceneContainerFlag
 import com.android.systemui.scene.shared.model.Overlays
 import com.android.systemui.scene.shared.model.Scenes
+import com.android.systemui.shade.LandscapeSplitShadeCutout
 import com.android.systemui.shade.LargeScreenHeaderHelper
 import com.android.systemui.shade.ShadeDisplayAware
 import com.android.systemui.shade.domain.interactor.ShadeInteractor
@@ -339,6 +341,24 @@ constructor(
                         val (marginStart, marginEnd) =
                             if (shadeMode is Single) {
                                 marginHorizontal to marginHorizontal
+                            } else if (shadeMode is Split) {
+                                // Notifications are the end column. Match the split-shade scrim:
+                                // only the camera inset on this edge. defaultVisible also includes
+                                // the back-gesture inset, which stays on the right in both
+                                // landscape rotations and leaves an empty strip beside the cards.
+                                val display = context.display
+                                val (cutoutLeft, cutoutRight) =
+                                    LandscapeSplitShadeCutout.horizontalInsets(
+                                        cutout = display?.cutout,
+                                        rotation = display?.rotation ?: Surface.ROTATION_0,
+                                        reverseDefaultRotation =
+                                            getBoolean(
+                                                com.android.internal.R.bool
+                                                    .config_reverseDefaultRotation
+                                            ),
+                                    )
+                                val cutoutEnd = if (isRtl) cutoutLeft else cutoutRight
+                                0 to marginHorizontal.coerceAtLeast(cutoutEnd)
                             } else {
                                 when (horizontalAlignment) {
                                     Alignment.Start ->

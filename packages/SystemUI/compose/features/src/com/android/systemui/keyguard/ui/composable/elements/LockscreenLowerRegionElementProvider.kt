@@ -29,11 +29,11 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.layout.wrapContentHeight
+import androidx.compose.runtime.Composable
 import androidx.compose.ui.unit.dp
 import com.android.compose.theme.PlatformTheme
 import com.android.systemui.axdynamicbar.ui.AxDynamicBarChipViewModel
 import com.android.systemui.axdynamicbar.ui.compose.AxDynamicBarKeyguardChip
-import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -94,12 +94,15 @@ constructor(
                     contentAlignment = Alignment.Center,
                 ) {
                     LockscreenElement(IndicationArea)
-                    // Same slot as the lockscreen charging line, between the shortcuts.
-                    PlatformTheme {
-                        AxDynamicBarKeyguardChip(
-                            viewModel = axDynamicBarChipViewModel,
-                            modifier = Modifier.widthIn(max = 260.dp),
-                        )
+                    val isLowUdfps by
+                        axDynamicBarChipViewModel.isLowUdfps.collectAsStateWithLifecycle()
+                    if (!isLowUdfps) {
+                        PlatformTheme {
+                            AxDynamicBarKeyguardChip(
+                                viewModel = axDynamicBarChipViewModel,
+                                modifier = Modifier.widthIn(max = 260.dp),
+                            )
+                        }
                     }
                 }
 

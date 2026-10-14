@@ -217,6 +217,7 @@ flag {
     namespace: "gpu"
     description: "Whether to use native driver for apps in the denylist"
     bug: "434014731"
+    is_exported: true
 }
 
 flag {

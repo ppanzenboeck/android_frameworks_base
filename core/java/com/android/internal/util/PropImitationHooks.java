@@ -23,6 +23,7 @@ import android.app.Application;
 import android.app.TaskStackListener;
 import android.content.ComponentName;
 import android.content.Context;
+import android.content.pm.PackageManager;
 import android.content.res.Resources;
 import android.os.Build;
 import android.os.Binder;
@@ -72,6 +73,7 @@ public class PropImitationHooks {
     private static final String PROCESS_GMS_UNSTABLE = PACKAGE_GMS + ".unstable";
     private static final String PACKAGE_NETFLIX = "com.netflix.mediaclient";
     private static final String PACKAGE_GPHOTOS = "com.google.android.apps.photos";
+    private static final String PACKAGE_GOOGLE_CAMERA = "com.google.android.GoogleCamera";
 
     private static final ComponentName GMS_ADD_ACCOUNT_ACTIVITY = ComponentName.unflattenFromString(
             "com.google.android.gms/.auth.uiflows.minutemaid.MinuteMaidActivity");
@@ -144,12 +146,31 @@ public class PropImitationHooks {
         sIsPhotos = packageName.equals(PACKAGE_GPHOTOS)
                 && SystemProperties.getBoolean("persist.sys.pihooks.gphotos", true);
 
-        /* Set Certified Properties for GMSCore
+        /* Guard against unsupported Google Camera execution on non-Pixel devices */
+        if (packageName.equals(PACKAGE_GOOGLE_CAMERA)) {
+            if (!Build.MANUFACTURER.equalsIgnoreCase("Google")) {
+                Log.w(TAG, "Unsupported device for Google Camera (" + Build.MANUFACTURER
+                        + "), disabling package and killing process to prevent crashes");
+                try {
+                    context.getPackageManager().setApplicationEnabledSetting(
+                            packageName,
+                            PackageManager.COMPONENT_ENABLED_STATE_DISABLED,
+                            0);
+                } catch (Exception e) {
+                    Log.e(TAG, "Failed to disable Google Camera", e);
+                }
+                Process.killProcess(Process.myPid());
+                System.exit(0);
+                return;
+            }
+        }
+
+        /* Set Certified Properties for GMSCore (do not spoof Play Store/Finsky to avoid Pixel auto-installs)
          * Set Stock Fingerprint for ARCore
          * Set custom model for Netflix
          * Set Pixel XL for Google Photos
          */
-        if (sIsGms || sIsFinsky) {
+        if (sIsGms) {
             if (!android.os.Process.isIsolated()) {
                 setPlayIntegrityProps(context);
             } else {
